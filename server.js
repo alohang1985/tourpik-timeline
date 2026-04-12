@@ -116,6 +116,31 @@ app.post('/api/admin/login', async (req, res) => {
   res.json({ ok: true, ...results });
 });
 
+// Tourpik cookie direct set (for Kakao login)
+app.post('/api/admin/cookie', async (req, res) => {
+  const { adminPw, cookie } = req.body;
+  if (adminPw !== ADMIN_PW) {
+    return res.status(401).json({ error: 'Wrong admin password' });
+  }
+  if (!cookie) {
+    return res.status(400).json({ error: 'Cookie required' });
+  }
+  tourpikCookies = cookie;
+
+  // Verify by fetching today's schedule
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const resp = await fetch(`https://www.tourpik.com/arch/lounge/popup/lounge_day.php?day=${today}&loc=b2`, {
+      headers: { 'Cookie': tourpikCookies },
+    });
+    const html = await resp.text();
+    const hasTable = html.includes('<table');
+    res.json({ ok: true, verified: hasTable });
+  } catch (err) {
+    res.json({ ok: true, verified: false, error: err.message });
+  }
+});
+
 // Admin status check
 app.get('/api/admin/status', (req, res) => {
   res.json({
