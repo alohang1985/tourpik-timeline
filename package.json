@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Tourpik Schedule Timeline - Web App",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
-    "express": "^4.21.0",
-    "node-fetch": "^2.7.0",
-    "tough-cookie": "^4.1.4"
+    "express": "^4.21.0"
   }
 }

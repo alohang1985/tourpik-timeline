@@ -1,5 +1,4 @@
 const express = require('express');
-const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
@@ -63,7 +62,7 @@ app.post('/api/admin/login', async (req, res) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 
-      const setCookies = resp.headers.raw()['set-cookie'] || [];
+      const setCookies = resp.headers.getSetCookie() || [];
       if (setCookies.length > 0) {
         tourpikCookies = setCookies.map(c => c.split(';')[0]).join('; ');
         results.tourpik = true;
@@ -139,7 +138,7 @@ app.get('/api/schedule', async (req, res) => {
       headers: { 'Cookie': tourpikCookies },
     });
 
-    const setCookies = resp.headers.raw()['set-cookie'] || [];
+    const setCookies = resp.headers.getSetCookie() || [];
     if (setCookies.length > 0) {
       tourpikCookies = setCookies.map(c => c.split(';')[0]).join('; ');
     }
