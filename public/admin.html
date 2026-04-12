@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tourpik Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px;
+      width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { font-size: 22px; color: #1e293b; margin-bottom: 6px; }
+    .sub { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    .section { margin-bottom: 20px; }
+    .section h3 {
+      font-size: 12px; font-weight: 700; color: #475569;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-admin { background: #ef4444; }
+    .dot-tourpik { background: #3b82f6; }
+    .dot-adsun { background: #22c55e; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 600; }
+    .field input {
+      width: 100%; padding: 10px 12px; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: 14px; font-family: inherit;
+    }
+    .field input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .btn {
+      width: 100%; padding: 12px; background: #3b82f6; color: #fff; border: none;
+      border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.6; cursor: wait; }
+    .status-row {
+      display: flex; gap: 12px; margin-top: 16px; font-size: 12px;
+    }
+    .status-row span {
+      padding: 4px 10px; border-radius: 12px; font-weight: 600;
+    }
+    .s-ok { background: #dcfce7; color: #15803d; }
+    .s-fail { background: #fecaca; color: #dc2626; }
+    .s-off { background: #f1f5f9; color: #94a3b8; }
+    .msg { margin-top: 12px; font-size: 13px; color: #ef4444; display: none; }
+    .back { display: block; text-align: center; margin-top: 16px; color: #3b82f6; font-size: 13px; font-weight: 600; text-decoration: none; }
+    .back:hover { text-decoration: underline; }
+    .current-status {
+      background: #f8fafc; border-radius: 10px; padding: 14px 16px;
+      margin-bottom: 24px; border: 1px solid #e2e8f0;
+    }
+    .current-status h4 { font-size: 12px; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Admin Panel</h1>
+    <p class="sub">Tourpik/Adsun 서버 로그인 관리</p>
+
+    <div class="current-status">
+      <h4>Current Connection</h4>
+      <div class="status-row" id="current-status">
+        <span class="s-off">Loading...</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3><span class="dot dot-admin"></span> Admin Password</h3>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="admin-pw" placeholder="Admin password" value="">
+      </div>
+    </div>
+
+    <div class="section">
+      <h3><span class="dot dot-tourpik"></span> Tourpik</h3>
+      <div class="field">
+        <label>ID</label>
+        <input type="text" id="tourpik-id" placeholder="Tourpik ID">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="tourpik-pw" placeholder="Tourpik Password">
+      </div>
+    </div>
+
+    <div class="section">
+      <h3><span class="dot dot-adsun"></span> Adsun GPS</h3>
+      <div class="field">
+        <label>ID</label>
+        <input type="text" id="adsun-id" placeholder="Adsun ID" value="50ld20233">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="adsun-pw" placeholder="Adsun Password" value="11118888">
+      </div>
+    </div>
+
+    <button class="btn" id="login-btn">Login to Services</button>
+    <div class="msg" id="msg"></div>
+    <div class="status-row" id="result-status" style="display:none"></div>
+
+    <a href="/" class="back">← Dashboard</a>
+  </div>
+
+  <script>
+    // Check current status
+    fetch('/api/admin/status').then(r => r.json()).then(s => {
+      document.getElementById('current-status').innerHTML =
+        `<span class="${s.tourpik ? 's-ok' : 's-fail'}">Tourpik: ${s.tourpik ? 'Connected' : 'Disconnected'}</span>` +
+        `<span class="${s.adsun ? 's-ok' : 's-fail'}">Adsun: ${s.adsun ? 'Connected' : 'Disconnected'}</span>`;
+    });
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('login-btn');
+      const msg = document.getElementById('msg');
+      const result = document.getElementById('result-status');
+      btn.disabled = true;
+      btn.textContent = 'Logging in...';
+      msg.style.display = 'none';
+      result.style.display = 'none';
+
+      try {
+        const resp = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminPw: document.getElementById('admin-pw').value,
+            tourpikId: document.getElementById('tourpik-id').value,
+            tourpikPw: document.getElementById('tourpik-pw').value,
+            adsunId: document.getElementById('adsun-id').value,
+            adsunPw: document.getElementById('adsun-pw').value,
+          }),
+        });
+
+        if (resp.status === 401) {
+          msg.textContent = 'Admin password가 틀렸습니다.';
+          msg.style.display = 'block';
+        } else {
+          const data = await resp.json();
+          result.style.display = 'flex';
+          result.innerHTML =
+            `<span class="${data.tourpik ? 's-ok' : 's-fail'}">Tourpik: ${data.tourpik ? 'OK' : 'Failed'}</span>` +
+            `<span class="${data.adsun ? 's-ok' : 's-fail'}">Adsun: ${data.adsun ? 'OK' : 'Failed'}</span>`;
+
+          // Update current status too
+          document.getElementById('current-status').innerHTML =
+            `<span class="${data.tourpik ? 's-ok' : 's-fail'}">Tourpik: ${data.tourpik ? 'Connected' : 'Disconnected'}</span>` +
+            `<span class="${data.adsun ? 's-ok' : 's-fail'}">Adsun: ${data.adsun ? 'Connected' : 'Disconnected'}</span>`;
+        }
+      } catch (err) {
+        msg.textContent = 'Connection error: ' + err.message;
+        msg.style.display = 'block';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Login to Services';
+    });
+  </script>
+</body>
+</html>

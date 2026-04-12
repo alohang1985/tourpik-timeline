@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tourpik Schedule Timeline</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    /* Connection banner */
+    #connection-banner {
+      background: #fef3c7;
+      color: #92400e;
+      padding: 10px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #connection-banner.hidden { display: none; }
+    #connection-banner a {
+      color: #d97706;
+      text-decoration: underline;
+      font-weight: 700;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-dot.ok { background: #22c55e; }
+    .status-dot.off { background: #ef4444; }
+  </style>
+</head>
+<body>
+
+  <!-- Connection status banner (shown when not logged in) -->
+  <div id="connection-banner" class="hidden">
+    <span>
+      <span class="status-dot off" id="tourpik-dot"></span>Tourpik: <span id="tourpik-status">Disconnected</span>
+      &nbsp;&nbsp;
+      <span class="status-dot off" id="adsun-dot"></span>Adsun GPS: <span id="adsun-status">Disconnected</span>
+    </span>
+    <a href="/admin.html">Admin Login</a>
+  </div>
+
+  <!-- DASHBOARD (always visible) -->
+  <header id="header">
+    <div class="header-left">
+      <h1>Schedule Timeline</h1>
+      <div class="date-nav">
+        <button id="date-prev" class="date-nav-btn" title="Previous day">&lsaquo;</button>
+        <input type="date" id="date-picker" class="date-picker">
+        <button id="date-next" class="date-nav-btn" title="Next day">&rsaquo;</button>
+        <button id="date-today" class="date-today-btn">Today</button>
+      </div>
+      <select id="loc-select" style="background:rgba(255,255,255,0.15);border:none;color:#fff;padding:5px 10px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+        <option value="b2" style="color:#000">Phu Quoc</option>
+        <option value="b7" style="color:#000">Nha Trang</option>
+      </select>
+      <span id="loc-badge" class="badge badge-loc"></span>
+      <div id="loading-indicator" class="loading hidden">Loading...</div>
+    </div>
+    <div class="header-right">
+      <button id="map-btn" class="map-btn" title="Live GPS Map">MAP</button>
+      <div class="stat">
+        <span class="stat-label">Total</span>
+        <span id="total-count" class="stat-value">0</span>
+      </div>
+      <div class="stat stat-warn">
+        <span class="stat-label">Unassigned</span>
+        <span id="unassigned-count" class="stat-value">0</span>
+      </div>
+      <button id="vehicle-settings-btn" class="settings-btn" title="Vehicle Settings">Settings</button>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-color" style="background:#3b82f6"></span>Airport Pickup</div>
+    <div class="legend-item"><span class="legend-color" style="background:#f59e0b"></span>Airport Dropoff</div>
+    <div class="legend-item"><span class="legend-color" style="background:#10b981"></span>Car Rental</div>
+    <div class="legend-item"><span class="legend-color" style="background:#8b5cf6"></span>Lounge</div>
+    <div class="legend-item"><span class="legend-color" style="background:#6b7280"></span>Other</div>
+    <div class="legend-item"><span class="legend-color" style="background:repeating-linear-gradient(45deg,#ef4444,#ef4444 2px,#fca5a5 2px,#fca5a5 4px)"></span>Unassigned</div>
+  </div>
+
+  <section id="vehicle-gantt-section">
+    <h2>Vehicle Timeline</h2>
+    <div id="vehicle-gantt-container"></div>
+  </section>
+
+  <section id="gantt-section">
+    <h2>Driver Timeline</h2>
+    <div id="gantt-container"></div>
+  </section>
+
+  <section id="list-section">
+    <h2>Chronological List</h2>
+    <div id="list-container"></div>
+  </section>
+
+  <!-- Vehicle Settings Modal -->
+  <div id="vehicle-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Vehicle Settings</h3>
+        <button id="modal-close" class="dp-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="vehicle-list"></div>
+        <button id="add-vehicle-btn" class="add-vehicle-btn">+ Add Vehicle</button>
+      </div>
+      <div class="modal-footer">
+        <button id="save-vehicles-btn" class="save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GPS Map Modal -->
+  <div id="map-modal" class="modal-overlay hidden">
+    <div class="modal modal-map">
+      <div class="modal-header">
+        <h3>Live Vehicle Map</h3>
+        <span id="map-status" class="map-status"></span>
+        <button id="map-modal-close" class="dp-close">&times;</button>
+      </div>
+      <div id="map-container"></div>
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip hidden"></div>
+
+  <link rel="stylesheet" href="leaflet.css">
+  <script src="leaflet.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
