@@ -144,17 +144,39 @@
 
     <div class="section">
       <h3><span class="dot dot-adsun"></span> Adsun GPS</h3>
-      <div class="field">
-        <label>ID</label>
-        <input type="text" id="adsun-id" placeholder="Adsun ID" value="50ld20233">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="adsun-token-tab">Token (from Browser)</button>
+        <button class="tab-btn" data-tab="adsun-idpw-tab">ID / PW</button>
       </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="adsun-pw" placeholder="Adsun Password" value="11118888">
+
+      <div id="adsun-token-tab" class="tab-content active">
+        <div class="field">
+          <label>Adsun Token</label>
+          <textarea id="adsun-token" placeholder="token value from cookie"></textarea>
+        </div>
+        <p class="help-text">
+          1. 크롬에서 dinhvi.adsun.vn 로그인<br>
+          2. F12 → Console 에서 <code>document.cookie</code> 입력<br>
+          3. <code>token=XXXXX</code> 부분의 값만 복사<br>
+          또는 전체 쿠키 문자열을 붙여넣으면 자동 추출됩니다.
+        </p>
+        <button class="btn btn-cookie" id="adsun-token-btn" style="background:#22c55e">Set Adsun Token</button>
+        <div class="msg" id="adsun-token-msg"></div>
+      </div>
+
+      <div id="adsun-idpw-tab" class="tab-content">
+        <div class="field">
+          <label>ID</label>
+          <input type="text" id="adsun-id" placeholder="Adsun ID" value="50ld20233">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="adsun-pw" placeholder="Adsun Password" value="11118888">
+        </div>
       </div>
     </div>
 
-    <button class="btn" id="login-btn">Login (Adsun + Tourpik ID/PW)</button>
+    <button class="btn" id="login-btn">Login (ID/PW method)</button>
     <div class="msg" id="msg"></div>
     <div class="status-row" id="result-status" style="display:none"></div>
 
@@ -224,6 +246,55 @@
 
       btn.disabled = false;
       btn.textContent = 'Set Tourpik Cookie';
+    });
+
+    // Adsun token submit
+    document.getElementById('adsun-token-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('adsun-token-btn');
+      const msg = document.getElementById('adsun-token-msg');
+      const adminPw = document.getElementById('admin-pw').value;
+      let tokenInput = document.getElementById('adsun-token').value.trim();
+
+      if (!adminPw) { msg.className = 'msg error'; msg.textContent = 'Admin password를 먼저 입력하세요.'; msg.style.display = 'block'; return; }
+      if (!tokenInput) { msg.className = 'msg error'; msg.textContent = 'Token을 입력하세요.'; msg.style.display = 'block'; return; }
+
+      // Extract token from cookie string if pasted full cookie
+      const tokenMatch = tokenInput.match(/token=([^;]+)/);
+      const token = tokenMatch ? tokenMatch[1] : tokenInput;
+
+      btn.disabled = true;
+      btn.textContent = 'Setting...';
+      msg.style.display = 'none';
+
+      try {
+        const resp = await fetch('/api/admin/adsun-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminPw, token }),
+        });
+
+        if (resp.status === 401) {
+          msg.className = 'msg error'; msg.textContent = 'Admin password가 틀렸습니다.'; msg.style.display = 'block';
+        } else {
+          const data = await resp.json();
+          if (data.verified) {
+            msg.className = 'msg ok'; msg.textContent = `Adsun 연결 성공! ${data.vehicleCount}대 차량 확인됨.`; msg.style.display = 'block';
+          } else {
+            msg.className = 'msg error'; msg.textContent = 'Token이 설정되었지만 차량 데이터를 가져올 수 없습니다. Token이 유효한지 확인하세요.'; msg.style.display = 'block';
+          }
+          // Refresh status
+          fetch('/api/admin/status').then(r => r.json()).then(s => {
+            document.getElementById('current-status').innerHTML =
+              `<span class="${s.tourpik ? 's-ok' : 's-fail'}">Tourpik: ${s.tourpik ? 'Connected' : 'Disconnected'}</span>` +
+              `<span class="${s.adsun ? 's-ok' : 's-fail'}">Adsun: ${s.adsun ? 'Connected' : 'Disconnected'}</span>`;
+          });
+        }
+      } catch (err) {
+        msg.className = 'msg error'; msg.textContent = 'Error: ' + err.message; msg.style.display = 'block';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Set Adsun Token';
     });
 
     // Login button (Adsun + optional Tourpik ID/PW)

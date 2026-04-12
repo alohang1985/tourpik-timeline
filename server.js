@@ -141,6 +141,31 @@ app.post('/api/admin/cookie', async (req, res) => {
   }
 });
 
+// Adsun token direct set
+app.post('/api/admin/adsun-token', async (req, res) => {
+  const { adminPw, token } = req.body;
+  if (adminPw !== ADMIN_PW) {
+    return res.status(401).json({ error: 'Wrong admin password' });
+  }
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
+  }
+  adsunToken = token;
+
+  // Verify by fetching vehicle data
+  try {
+    const resp = await fetch(
+      'https://systemroute.adsun.vn/api/Device/GetDeviceStatusByCompanyId?companyId=4146',
+      { headers: { token: adsunToken } }
+    );
+    const data = await resp.json();
+    const count = (data.Datas || []).length;
+    res.json({ ok: true, verified: count > 0, vehicleCount: count });
+  } catch (err) {
+    res.json({ ok: true, verified: false, error: err.message });
+  }
+});
+
 // Admin status check
 app.get('/api/admin/status', (req, res) => {
   res.json({
