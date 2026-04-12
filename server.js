@@ -18,7 +18,10 @@ let loginStatus = { tourpik: false, adsun: false };
 const ADMIN_PW = process.env.ADMIN_PW || 'tourpik2024';
 
 // ========== DATA FILES ==========
-const DATA_DIR = path.join(__dirname, 'data');
+// Use RAILWAY_VOLUME_MOUNT_PATH if available (persistent storage), otherwise local data/
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'data')
+  : path.join(__dirname, 'data');
 const VEHICLES_FILE = path.join(DATA_DIR, 'vehicles.json');
 const ASSIGNMENTS_FILE = path.join(DATA_DIR, 'assignments.json');
 
