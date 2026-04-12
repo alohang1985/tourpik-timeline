@@ -326,6 +326,6 @@ app.post('/api/assignments', (req, res) => {
 });
 
 // ========== START ==========
-app.listen(PORT, () => {
-  console.log(`Tourpik Web running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Tourpik Web running on port ${PORT}`);
 });
