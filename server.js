@@ -328,32 +328,56 @@ app.post('/api/driver', async (req, res) => {
 });
 
 // ========== GPS ==========
-app.get('/api/gps', async (req, res) => {
-  if (!adsunToken) {
-    return res.json({ vehicles: null, error: 'Adsun not logged in' });
-  }
+let cachedGpsData = null;
+let gpsLastUpdate = 0;
 
-  try {
-    const resp = await fetch(
-      'https://systemroute.adsun.vn/api/Device/GetDeviceStatusByCompanyId?companyId=4146',
-      { headers: { token: adsunToken } }
-    );
-    const data = await resp.json();
-    const vehicles = (data.Datas || []).map(d => ({
-      plate: d.Bs, serial: d.Serial,
-      lat: d.Location ? d.Location.Lat : 0,
-      lng: d.Location ? d.Location.Lng : 0,
-      speed: d.speed, lastUpdate: d.timeUpdate,
-      engineOn: d.trangThaiMay, lostSignal: d.lostgsm,
-      seat: d.sheat, model: d.modeltype,
-      driver: d.nameDriver, angle: d.Angle,
-    }));
-    res.json({ vehicles });
-  } catch (err) {
-    console.error('GPS fetch error:', err.message);
-    res.json({ vehicles: null, error: err.message });
+// GET: return cached GPS data (for dashboard)
+app.get('/api/gps', (req, res) => {
+  if (cachedGpsData) {
+    res.json({ vehicles: cachedGpsData, updatedAt: gpsLastUpdate });
+  } else if (adsunToken) {
+    // Try direct fetch (works if server can reach adsun)
+    fetchGpsFromAdsun().then(vehicles => {
+      res.json({ vehicles });
+    }).catch(() => {
+      res.json({ vehicles: null, error: 'GPS data not available. Run local proxy or push from browser.' });
+    });
+  } else {
+    res.json({ vehicles: null, error: 'Adsun not connected' });
   }
 });
+
+// POST: receive GPS data push (from local proxy or browser)
+app.post('/api/gps/push', (req, res) => {
+  const { adminPw, vehicles } = req.body;
+  if (adminPw !== ADMIN_PW) {
+    return res.status(401).json({ error: 'Wrong admin password' });
+  }
+  cachedGpsData = vehicles;
+  gpsLastUpdate = Date.now();
+  res.json({ ok: true, count: vehicles ? vehicles.length : 0 });
+});
+
+async function fetchGpsFromAdsun() {
+  if (!adsunToken) return null;
+  const resp = await fetch(
+    'https://systemroute.adsun.vn/api/Device/GetDeviceStatusByCompanyId?companyId=4146',
+    { headers: { token: adsunToken } }
+  );
+  const data = await resp.json();
+  const vehicles = (data.Datas || []).map(d => ({
+    plate: d.Bs, serial: d.Serial,
+    lat: d.Location ? d.Location.Lat : 0,
+    lng: d.Location ? d.Location.Lng : 0,
+    speed: d.speed, lastUpdate: d.timeUpdate,
+    engineOn: d.trangThaiMay, lostSignal: d.lostgsm,
+    seat: d.sheat, model: d.modeltype,
+    driver: d.nameDriver, angle: d.Angle,
+  }));
+  cachedGpsData = vehicles;
+  gpsLastUpdate = Date.now();
+  return vehicles;
+}
 
 // ========== VEHICLES CONFIG ==========
 app.get('/api/vehicles', (req, res) => {
