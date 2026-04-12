@@ -325,7 +325,23 @@ app.post('/api/assignments', (req, res) => {
   res.json({ ok: true });
 });
 
+// ========== ERROR HANDLER ==========
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: err.message });
+});
+
 // ========== START ==========
-app.listen(PORT, '0.0.0.0', () => {
+console.log('Starting server...');
+console.log('PORT env:', process.env.PORT);
+console.log('Using port:', PORT);
+console.log('Data dir:', DATA_DIR);
+console.log('Data dir exists:', fs.existsSync(DATA_DIR));
+
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Tourpik Web running on port ${PORT}`);
+});
+
+server.on('error', (err) => {
+  console.error('Server error:', err);
 });
