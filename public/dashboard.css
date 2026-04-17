@@ -362,6 +362,10 @@ section h2 {
   background: #8b5cf6;
 }
 
+.gantt-block.type-tour {
+  background: #ec4899;
+}
+
 .gantt-block.type-other {
   background: #6b7280;
 }
@@ -423,6 +427,10 @@ section h2 {
 
 .list-card.type-lounge {
   border-left-color: #8b5cf6;
+}
+
+.list-card.type-tour {
+  border-left-color: #ec4899;
 }
 
 .list-card.type-other {

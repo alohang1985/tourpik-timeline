@@ -9,11 +9,6 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ========== IN-MEMORY SESSION ==========
-let tourpikCookies = '';
-let adsunToken = '';
-let loginStatus = { tourpik: false, adsun: false };
-
 // Admin password (set via env or default)
 const ADMIN_PW = process.env.ADMIN_PW || 'tourpik2024';
 
@@ -24,9 +19,65 @@ const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
   : path.join(__dirname, 'data');
 const VEHICLES_FILE = path.join(DATA_DIR, 'vehicles.json');
 const ASSIGNMENTS_FILE = path.join(DATA_DIR, 'assignments.json');
+const SESSION_FILE = path.join(DATA_DIR, 'session.json');
+const DURATIONS_FILE = path.join(DATA_DIR, 'durations.json');
 
 // Ensure data dir exists
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// ========== IN-MEMORY SESSION (restored from disk) ==========
+let tourpikCookies = '';
+let adsunToken = '';
+
+// Restore session from disk
+try {
+  if (fs.existsSync(SESSION_FILE)) {
+    const s = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    tourpikCookies = s.tourpikCookies || '';
+    adsunToken = s.adsunToken || '';
+    console.log('Session restored from disk');
+  }
+} catch (e) { console.error('Session restore failed:', e.message); }
+
+function saveSession() {
+  try {
+    fs.writeFileSync(SESSION_FILE, JSON.stringify({ tourpikCookies, adsunToken }));
+  } catch (e) { console.error('Session save failed:', e.message); }
+}
+
+// Tour duration customization (editable via admin)
+let tourDurations = {};
+try {
+  if (fs.existsSync(DURATIONS_FILE)) {
+    tourDurations = JSON.parse(fs.readFileSync(DURATIONS_FILE, 'utf8'));
+  }
+} catch (e) {}
+
+// Defaults for named tours
+const DEFAULT_TOUR_DURATIONS = {
+  'high class welcome': 300,       // 5hr
+  'welcome tour': 300,
+  'morning tour': 300,              // 5hr
+  '모닝투어': 300,
+  'sending tour': 180,              // 3hr
+  '샌딩투어': 180,
+  '가성비투어': 300,                 // 5hr
+  '가성비 tour': 300,
+  'budget tour': 300,
+};
+
+function getDurationForTour(tour, defaultMin) {
+  const lower = tour.toLowerCase();
+  // Check user-configured first
+  for (const [key, val] of Object.entries(tourDurations)) {
+    if (lower.includes(key.toLowerCase())) return val;
+  }
+  // Then defaults
+  for (const [key, val] of Object.entries(DEFAULT_TOUR_DURATIONS)) {
+    if (lower.includes(key.toLowerCase())) return val;
+  }
+  return null;
+}
 
 function readJson(filepath, fallback) {
   try {
@@ -115,7 +166,7 @@ app.post('/api/admin/login', async (req, res) => {
     }
   }
 
-  loginStatus = results;
+  saveSession();
   res.json({ ok: true, ...results });
 });
 
@@ -129,6 +180,7 @@ app.post('/api/admin/cookie', async (req, res) => {
     return res.status(400).json({ error: 'Cookie required' });
   }
   tourpikCookies = cookie;
+  saveSession();
 
   // Verify by fetching today's schedule
   try {
@@ -154,6 +206,7 @@ app.post('/api/admin/adsun-token', async (req, res) => {
     return res.status(400).json({ error: 'Token required' });
   }
   adsunToken = token;
+  saveSession();
 
   // Verify by fetching vehicle data
   try {
@@ -180,6 +233,21 @@ app.get('/api/admin/fetch-items', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Tour durations management
+app.get('/api/tour-durations', (req, res) => {
+  res.json({ custom: tourDurations, defaults: DEFAULT_TOUR_DURATIONS });
+});
+
+app.post('/api/admin/tour-durations', (req, res) => {
+  const { adminPw, durations } = req.body;
+  if (adminPw !== ADMIN_PW) return res.status(401).json({ error: 'Wrong admin password' });
+  tourDurations = durations || {};
+  try {
+    fs.writeFileSync(DURATIONS_FILE, JSON.stringify(tourDurations, null, 2));
+  } catch (e) { console.error(e.message); }
+  res.json({ ok: true });
 });
 
 // Admin status check
@@ -265,8 +333,21 @@ function parseScheduleHtml(html, targetDay, targetLoc) {
     const pickupLower = pickup.toLowerCase();
     const dropoffLower = dropoff.toLowerCase();
 
+    // Named tour with fixed duration (welcome/morning/sending/가성비 etc.)
+    const namedDuration = getDurationForTour(tour);
+
+    // Detect specific tour keywords - these take precedence
+    const isNamedTour = namedDuration !== null ||
+      tourLower.includes('welcome tour') ||
+      tourLower.includes('morning tour') ||
+      tourLower.includes('모닝투어') ||
+      tourLower.includes('가성비') ||
+      (tourLower.includes('sending tour') && !tourLower.includes('airport'));
+
     if (tourLower.includes('rental') || tourLower.includes('car')) {
       tourType = 'rental';
+    } else if (isNamedTour && !tourLower.includes('airport pickup')) {
+      tourType = 'tour';
     } else if (
       (pickupLower.includes('airport') && !dropoffLower.includes('airport')) ||
       tourLower.includes('airport pickup')
@@ -283,11 +364,13 @@ function parseScheduleHtml(html, targetDay, targetLoc) {
     }
 
     let duration = 60;
-    if (tourType === 'airport_pickup' || tourType === 'airport_dropoff') duration = 45;
+    if (namedDuration !== null) duration = namedDuration;
+    else if (tourType === 'airport_pickup' || tourType === 'airport_dropoff') duration = 45;
     else if (tourType === 'rental') {
       const hourMatch = remark.match(/(\d+)\s*시간/);
       duration = hourMatch ? parseInt(hourMatch[1]) * 60 : 480;
     } else if (tourType === 'lounge') duration = 30;
+    else if (tourType === 'tour') duration = 300; // fallback for detected tour
 
     schedules.push({
       time, tour, itemId, uniq, remark, pickup, dropoff,
