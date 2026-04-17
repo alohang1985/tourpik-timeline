@@ -504,6 +504,28 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
+// ========== KEEP-ALIVE (prevent session expiry) ==========
+// Ping tourpik every 10 minutes to keep PHP session alive
+async function tourpikKeepAlive() {
+  if (!tourpikCookies) return;
+  try {
+    const resp = await fetch('https://www.tourpik.com/arch/lounge/popup/lounge_day.php?day=' + new Date().toISOString().slice(0,10) + '&loc=b2', {
+      headers: { 'Cookie': tourpikCookies },
+    });
+    const setCookies = resp.headers.getSetCookie() || [];
+    if (setCookies.length > 0) {
+      tourpikCookies = setCookies.map(c => c.split(';')[0]).join('; ');
+      saveSession();
+    }
+    const html = await resp.text();
+    const alive = html.includes('<table') && !html.toLowerCase().includes('login');
+    console.log(`[keep-alive] Tourpik: ${alive ? 'OK' : 'EXPIRED'}`);
+  } catch (e) {
+    console.error('[keep-alive] Tourpik error:', e.message);
+  }
+}
+setInterval(tourpikKeepAlive, 10 * 60 * 1000); // every 10 min
+
 // ========== START ==========
 console.log('Starting server...');
 console.log('PORT env:', process.env.PORT);
