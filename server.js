@@ -53,18 +53,58 @@ try {
   }
 } catch (e) {}
 
-// Defaults for named tours
+// Defaults for named tours (generic fallback when flight code not matched)
 const DEFAULT_TOUR_DURATIONS = {
-  'high class welcome': 300,       // 5hr
-  'welcome tour': 300,
-  'morning tour': 300,              // 5hr
-  '모닝투어': 300,
-  'sending tour': 180,              // 3hr
-  '샌딩투어': 180,
-  '가성비투어': 300,                 // 5hr
-  '가성비 tour': 300,
-  'budget tour': 300,
+  'high class welcome': 270,
+  'welcome tour': 270,
+  'morning tour': 330,
+  '모닝투어': 330,
+  'sending tour': 420,
+  '샌딩투어': 420,
+  '가성비투어': 330,
+  '가성비 tour': 330,
+  'budget tour': 330,
 };
+
+// Flight-code specific mapping { startTime, endTime, tourType, onlyIfTourName }
+// This takes PRIORITY over generic tour name matching
+// If tour name includes one of `onlyIfTourName`, apply this rule (avoids conflict with airport pickup)
+const FLIGHT_CODE_MAP = {
+  // 모닝투어 가성비+하이클래스 → 05:35~13:00
+  'VJ979': { startTime: '05:35', endTime: '13:00', tourType: 'tour', onlyIfTourName: ['morning', '모닝', '가성비', '하이클래스', 'high class'] },
+  'VJ975': { startTime: '05:35', endTime: '13:00', tourType: 'tour', onlyIfTourName: ['morning', '모닝', '가성비', '하이클래스', 'high class'] },
+  // 하이클래스 모닝투어 VJ977 → 08:35~14:00
+  'VJ977': { startTime: '08:35', endTime: '14:00', tourType: 'tour', onlyIfTourName: ['morning', '모닝', '하이클래스', 'high class'] },
+  // 하이클래스 모닝투어 VJ969, ZE583 → 11:00~14:00
+  'VJ969': { startTime: '11:00', endTime: '14:00', tourType: 'tour', onlyIfTourName: ['morning', '모닝', '하이클래스', 'high class'] },
+  'ZE583': { startTime: '11:00', endTime: '14:00', tourType: 'tour', onlyIfTourName: ['morning', '모닝', '하이클래스', 'high class'] },
+  // 웰컴투어 → 21:30~다음날 14:00 (0.5박)
+  'WE207':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  '7C2315': { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  'KE485':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  'LJ091':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  'ZE581':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  'ZE981':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  'TW055':  { startTime: '21:30', endTime: '14:00', tourType: 'tour', crossDay: true, onlyIfTourName: ['welcome', '웰컴'] },
+  // 센딩투어 VJ976 → 11:30~18:30
+  'VJ976': { startTime: '11:30', endTime: '18:30', tourType: 'airport_dropoff', onlyIfTourName: ['sending', '센딩', '샌딩'] },
+};
+
+// Sending tour - any flight code when tour name contains "sending/센딩"
+// Default 11:30 start, flight departure time as end. If no match, default 8hr (480min)
+const SENDING_DEFAULT_START = '11:30';
+const SENDING_DEFAULT_DURATION = 480; // 8hr
+
+function extractFlightCode(text) {
+  // Match patterns like VJ977, WE207, 7C2315, KE485, LJ091, ZE581, TW055
+  const m = text.match(/\b([A-Z]{1,2}\d{2,5}|7C\d{2,5})\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function timeStrToMin(t) {
+  const parts = t.split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
 
 function getDurationForTour(tour, defaultMin) {
   const lower = tour.toLowerCase();
@@ -329,52 +369,77 @@ function parseScheduleHtml(html, targetDay, targetLoc) {
     pax.total = (pax.adult || 0) + (pax.child || 0) + (pax.infant || 0);
 
     let tourType = 'other';
+    let finalTime = time;
+    let duration = 60;
+
     const tourLower = tour.toLowerCase();
+    const combinedText = (tour + ' ' + remark).toLowerCase();
     const pickupLower = pickup.toLowerCase();
     const dropoffLower = dropoff.toLowerCase();
 
-    // Named tour with fixed duration (welcome/morning/sending/가성비 etc.)
-    const namedDuration = getDurationForTour(tour);
+    // ===== 1) Flight-code based mapping (HIGHEST PRIORITY) =====
+    const flightCode = extractFlightCode(tour + ' ' + remark + ' ' + voucher);
+    const flightRule = flightCode ? FLIGHT_CODE_MAP[flightCode] : null;
+    const matchesKeyword = flightRule
+      ? flightRule.onlyIfTourName.some(kw => combinedText.includes(kw.toLowerCase()))
+      : false;
 
-    // Detect specific tour keywords - these take precedence
-    const isNamedTour = namedDuration !== null ||
-      tourLower.includes('welcome tour') ||
-      tourLower.includes('morning tour') ||
-      tourLower.includes('모닝투어') ||
-      tourLower.includes('가성비') ||
-      (tourLower.includes('sending tour') && !tourLower.includes('airport'));
+    if (flightRule && matchesKeyword) {
+      tourType = flightRule.tourType;
+      if (flightRule.startTime) finalTime = flightRule.startTime;
+      const startMin = timeStrToMin(finalTime);
+      let endMin = timeStrToMin(flightRule.endTime);
+      if (flightRule.crossDay || endMin <= startMin) endMin += 24 * 60;
+      duration = endMin - startMin;
+    }
+    // ===== 2) Generic tour keyword matching =====
+    else {
+      const namedDuration = getDurationForTour(tour);
+      const isNamedTour = namedDuration !== null ||
+        tourLower.includes('welcome tour') || tourLower.includes('웰컴') ||
+        tourLower.includes('morning tour') || tourLower.includes('모닝투어') ||
+        tourLower.includes('가성비') ||
+        tourLower.includes('high class') || tourLower.includes('하이클래스');
 
-    if (tourLower.includes('rental') || tourLower.includes('car')) {
-      tourType = 'rental';
-    } else if (isNamedTour && !tourLower.includes('airport pickup')) {
-      tourType = 'tour';
-    } else if (
-      (pickupLower.includes('airport') && !dropoffLower.includes('airport')) ||
-      tourLower.includes('airport pickup')
-    ) {
-      tourType = 'airport_pickup';
-    } else if (
-      dropoffLower.includes('airport') ||
-      tourLower.includes('to airport') ||
-      tourLower.includes('sending')
-    ) {
-      tourType = 'airport_dropoff';
-    } else if (pickupLower.includes('lounge') || dropoffLower.includes('lounge')) {
-      tourType = 'lounge';
+      const isSendingTour = tourLower.includes('sending tour') || tourLower.includes('센딩투어') || tourLower.includes('샌딩투어');
+
+      if (tourLower.includes('rental') || tourLower.includes('car')) {
+        tourType = 'rental';
+      } else if (isSendingTour) {
+        tourType = 'airport_dropoff';
+        finalTime = SENDING_DEFAULT_START;
+        duration = SENDING_DEFAULT_DURATION;
+      } else if (isNamedTour && !tourLower.includes('airport pickup')) {
+        tourType = 'tour';
+        duration = namedDuration || 300;
+      } else if (
+        (pickupLower.includes('airport') && !dropoffLower.includes('airport')) ||
+        tourLower.includes('airport pickup')
+      ) {
+        tourType = 'airport_pickup';
+      } else if (
+        dropoffLower.includes('airport') ||
+        tourLower.includes('to airport') ||
+        tourLower.includes('sending')
+      ) {
+        tourType = 'airport_dropoff';
+      } else if (pickupLower.includes('lounge') || dropoffLower.includes('lounge')) {
+        tourType = 'lounge';
+      }
+
+      if (tourType === 'airport_pickup' || tourType === 'airport_dropoff') {
+        if (!isSendingTour) duration = 45;
+      } else if (tourType === 'rental') {
+        const hourMatch = remark.match(/(\d+)\s*시간/);
+        duration = hourMatch ? parseInt(hourMatch[1]) * 60 : 480;
+      } else if (tourType === 'lounge') duration = 30;
     }
 
-    let duration = 60;
-    if (namedDuration !== null) duration = namedDuration;
-    else if (tourType === 'airport_pickup' || tourType === 'airport_dropoff') duration = 45;
-    else if (tourType === 'rental') {
-      const hourMatch = remark.match(/(\d+)\s*시간/);
-      duration = hourMatch ? parseInt(hourMatch[1]) * 60 : 480;
-    } else if (tourType === 'lounge') duration = 30;
-    else if (tourType === 'tour') duration = 300; // fallback for detected tour
-
     schedules.push({
-      time, tour, itemId, uniq, remark, pickup, dropoff,
+      time: finalTime, tour, itemId, uniq, remark, pickup, dropoff,
       voucher, pax, paxRaw, driverName, driverPhone, tourType, duration,
+      originalTime: time !== finalTime ? time : undefined,
+      flightCode: flightCode || undefined,
     });
   });
 
