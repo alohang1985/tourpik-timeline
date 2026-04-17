@@ -469,11 +469,20 @@
       out += `<div class="gantt-now-line" style="left:${minutesToPercent(now.getHours() * 60 + now.getMinutes())}%"></div>`;
     }
     blocks.forEach((b) => {
-      const left = minutesToPercent(b.startMin), width = minutesToPercent(b.duration);
+      const left = minutesToPercent(b.startMin);
+      const rawWidth = minutesToPercent(b.duration);
+      const maxWidth = 100 - left;
+      const overflows = rawWidth > maxWidth;
+      const width = overflows ? maxWidth : rawWidth;
       const cls = isUnassigned ? 'gantt-block unassigned' : `gantt-block type-${b.tourType}`;
       const veh = getVehicleForSchedule(b);
-      const label = b.time + ' ' + b.voucher + (veh ? ' [' + veh.plate + ']' : '');
-      out += `<div class="${cls}" style="left:${left}%;width:${Math.max(width, 1.2)}%" data-schedule='${JSON.stringify(b).replace(/'/g, '&#39;')}'>${escapeHtml(label)}</div>`;
+      const endMin = b.startMin + b.duration;
+      const endHour = Math.floor(endMin / 60);
+      const endMinStr = String(Math.floor(endMin % 60)).padStart(2, '0');
+      const endTimeStr = String(endHour).padStart(2, '0') + ':' + endMinStr;
+      const label = b.time + ' ' + b.voucher + (veh ? ' [' + veh.plate + ']' : '') + (overflows ? ' →' + endTimeStr : '');
+      const overflowStyle = overflows ? 'border-right: 3px dashed #fff;' : '';
+      out += `<div class="${cls}" style="left:${left}%;width:${Math.max(width, 1.2)}%;${overflowStyle}" data-schedule='${JSON.stringify(b).replace(/'/g, '&#39;')}'>${escapeHtml(label)}</div>`;
     });
     return out;
   }
