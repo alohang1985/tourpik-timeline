@@ -169,6 +169,19 @@ app.post('/api/admin/adsun-token', async (req, res) => {
   }
 });
 
+// Debug: fetch raw tourpik page
+app.get('/api/admin/fetch-items', async (req, res) => {
+  if (!tourpikCookies) return res.status(503).json({ error: 'Not logged in' });
+  const url = req.query.url || 'https://www.tourpik.com/items.php?ca=a8&ca_b=b14&loc=b2';
+  try {
+    const resp = await fetch(url, { headers: { 'Cookie': tourpikCookies } });
+    const html = await resp.text();
+    res.type('text/html').send(html);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin status check
 app.get('/api/admin/status', (req, res) => {
   res.json({
